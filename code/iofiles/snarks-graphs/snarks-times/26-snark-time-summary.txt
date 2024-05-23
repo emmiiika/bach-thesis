@@ -1,0 +1,5 @@
+iofiles/snarks-graphs/snarks-times/Generated_graphs.26.05.sn.cyc4-time.g6
+       [ms]: 9241544
+       [s]: 9241
+       [min]: 154
+       [h]: 2

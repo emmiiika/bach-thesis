@@ -1,0 +1,40 @@
+# WARNING: requires gcc 8+ (better to use 10+) or clang 6+ (better to use 10) to support C++20 features
+
+# this can be replaced by an absolute path
+BA_GRAPH_INCLUDE_PATH := $(dir $(abspath ../$(lastword $(MAKEFILE_LIST))))include
+
+NAUTY_INCLUDE_PATH = /usr/local/lib/nauty
+NAUTY_LIB_PATH = /usr/local/lib/nauty
+NAUTY_LD_OPTIONS = -l:nauty.a
+
+CRYPTOMINISAT_INCLUDE_PATH = /usr/include/cryptominisat5
+CRYPTOMINISAT_LIB_PATH = /usr/lib
+
+GOOGLETEST_INCLUDE_PATH = /usr/src/gtest/include
+GOOGLETEST_LIB_PATH = /usr/src/googletest/build/lib
+GOOGLETEST_LD_OPTIONS = -l:libgtest.a -l:libgtest_main.a
+
+
+
+DEFAULT_CXXFLAGS := -std=c++17 -fconcepts -I$(BA_GRAPH_INCLUDE_PATH)
+
+DEFAULT_DBGFLAGS := -g -O0 -pedantic -Wall -Wextra -DBA_GRAPH_DEBUG -D_GLIBCXX_DEBUG
+
+DEFAULT_LDFLAGS :=
+
+DEFAULT_LDLIBS :=
+
+
+
+# do not delete compiled tests (could be analyzed with valgrind etc.)
+.SECONDARY:
+
+.DEFAULT_GOAL := all
+
+ASTYLERC = $(dir $(abspath ../$(lastword $(MAKEFILE_LIST)))).astylerc
+
+format:
+	astyle --options=$(ASTYLERC) *.h   || true
+	astyle --options=$(ASTYLERC) *.hpp || true
+	astyle --options=$(ASTYLERC) *.c   || true
+	astyle --options=$(ASTYLERC) *.cpp || true

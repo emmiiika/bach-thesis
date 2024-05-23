@@ -1,0 +1,5 @@
+--style=kr
+--indent-preprocessor
+--indent-preproc-cond
+--indent-continuation=2
+--pad-oper

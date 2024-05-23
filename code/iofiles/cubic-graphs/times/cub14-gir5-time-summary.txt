@@ -1,0 +1,5 @@
+iofiles/cubic-graphs/times/cub14-gir5-time.g6
+       [ms]: 8
+       [s]: 0
+       [min]: 0
+       [h]: 0

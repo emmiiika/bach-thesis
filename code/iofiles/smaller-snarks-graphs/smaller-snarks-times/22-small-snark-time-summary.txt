@@ -1,0 +1,5 @@
+iofiles/smaller-snarks-graphs/smaller-snarks-times/Generated_graphs.22.04.sn.cyc4-time.g6
+       [ms]: 84334
+       [s]: 84
+       [min]: 1
+       [h]: 0

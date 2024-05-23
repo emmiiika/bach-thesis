@@ -1,0 +1,11 @@
+# Project specific
+
+implementation.h
+implementation_basic.h
+!/implementation_basic.h
+
+*.out
+*.exe
+*.swp
+headers.txt
+

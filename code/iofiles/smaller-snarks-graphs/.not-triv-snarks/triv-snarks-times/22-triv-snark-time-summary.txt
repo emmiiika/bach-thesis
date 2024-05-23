@@ -1,0 +1,5 @@
+iofiles/triv-snarks-graphs/triv-snarks-times/Generated_graphs.22.04.sn.cyc4-time.g6
+       [ms]: 344628
+       [s]: 344
+       [min]: 5
+       [h]: 0
