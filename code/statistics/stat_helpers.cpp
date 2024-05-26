@@ -15,6 +15,7 @@
 #include <set>
 #include <invariants/colouring.hpp>
 #include "../ctpl_stl.h"
+#include <algorithms/isomorphism/isomorphism_nauty.hpp>
 
 void file_line_count(std::string file_name){
     int count = 0;
@@ -122,6 +123,21 @@ int get_girth(grph g){
 bool is_edge_colorable(grph g) {
     ba_graph::Graph G = graph_to_ba_graph(g);
     return ba_graph::is_edge_colourable_basic(G, 3);
+}
+
+/*
+ * This function turns graph g into its canonical form.
+*/
+std::string canonical_form(grph g) {
+    ba_graph::Graph G = graph_to_ba_graph(g);
+    return canonical_sparse6(G);
+}
+
+bool is_snark(std::set<std::string> snarks, std::string graph){
+    if(snarks.find(graph) != snarks.end()){
+        return true;
+    }
+    return false;
 }
 
 std::pair<std::string, std::vector<std::string>> parse_origin_line(std::string line){
@@ -756,10 +772,11 @@ void add_num_of_edges_to_origin_file(std::string in_file, std::string out_file){
 }
 
 /*
- *  This function
+ *  This function writes all possible numbers of vertices of a graph and assignes all possible 
+ *  numbers of subgraphs' vertices that can be generated from them.
  */
 void vertices_diff(std::string in_file, std::string type) {
-    std::cout << std::endl << "ONLY THE NUMBER OF VERTICES OF SUBGRAPHS ASSIGNED TO THE ORIGIN GRAPH'S VERTICES" << std::endl;
+    std::cout << std::endl << "ASSIGN NUMBER OF ALL SUBGRAPHS' VERTICES TO ALL POSSIBLE NUMBERS OF GRAPHS' VERTICES" << std::endl;
 
     if (type == "cubic") {
         remove_previous_file("iofiles/cubic-graphs/vertex-diff.txt");
@@ -830,10 +847,11 @@ void vertices_diff(std::string in_file, std::string type) {
 }
 
 /*
- *  This function
+ *  This function writes all possible numbers of edges of a graph and assignes all possible 
+ *  numbers of subgraphs' edges that can be generated from them.
  */
 void edges_diff(std::string in_file, std::string type) {
-    std::cout << std::endl << "ONLY THE NUMBER OF EDGES OF SUBGRAPHS ASSIGNED TO THE ORIGIN GRAPH'S VERTICES" << std::endl;
+    std::cout << std::endl << "ASSIGN NUMBER OF ALL SUBGRAPHS' EDGES TO ALL POSSIBLE NUMBERS OF GRAPHS' EDGES" << std::endl;
 
     if (type == "cubic") {
         remove_previous_file("iofiles/cubic-graphs/edges-diff.txt");
@@ -948,13 +966,13 @@ void sort_origin_by_subgraphs(std::string in_file, std::string type){
     std::cout << std::endl << "SORTING GRAPHS BY SUBGRAPHS" << std::endl;
 
     if(type ==  "cubic") {
-        remove_previous_file("iofiles/cubic-graphs/subgrahps-origin.txt");
+        remove_previous_file("iofiles/cubic-graphs/subgraphs-origin.txt");
     } else if(type == "snark"){
-        remove_previous_file("iofiles/snarks-graphs/subgrahps-origin.txt");
+        remove_previous_file("iofiles/snarks-graphs/subgraphs-origin.txt");
     } else if(type == "small-cubic"){
-        remove_previous_file("iofiles/smaller-cubic-graphs/subgrahps-origin.txt");
+        remove_previous_file("iofiles/smaller-cubic-graphs/subgraphs-origin.txt");
     } else if(type == "small-snark"){
-        remove_previous_file("iofiles/smaller-snarks-graphs/subgrahps-origin.txt");
+        remove_previous_file("iofiles/smaller-snarks-graphs/subgraphs-origin.txt");
     }
 
 
@@ -985,19 +1003,20 @@ void sort_origin_by_subgraphs(std::string in_file, std::string type){
     std::ofstream output_file;
     std::string out_file;
     if(type ==  "cubic") {
-        out_file = "iofiles/cubic-graphs/subgrahps-origin.txt";
+        out_file = "iofiles/cubic-graphs/subgraphs-origin.txt";
     } else if(type == "snark"){
-        out_file = "iofiles/snarks-graphs/subgrahps-origin.txt";
+        out_file = "iofiles/snarks-graphs/subgraphs-origin.txt";
     } else if(type == "small-cubic"){
-        out_file = "iofiles/smaller-cubic-graphs/subgrahps-origin.txt";
+        out_file = "iofiles/smaller-cubic-graphs/subgraphs-origin.txt";
     } else if(type == "small-snark"){
-        out_file = "iofiles/smaller-snarks-graphs/subgrahps-origin.txt";
+        out_file = "iofiles/smaller-snarks-graphs/subgraphs-origin.txt";
     }
     output_file.open(out_file);
     if (output_file.is_open()) {
         for(auto elem: graphs_by_subgraphs){
             std::string output = "";
-            output += elem.first + "(" + std::to_string(elem.second.size()) + "): ";
+//            output += elem.first + ": (" + std::to_string(elem.second.size()) + "), ";
+            output += elem.first + ": ";
             for(std::string subgraph: elem.second){
                 output += subgraph + ", ";
             }
@@ -1011,6 +1030,477 @@ void sort_origin_by_subgraphs(std::string in_file, std::string type){
         std::cout << "Couldn't open output file." << std::endl;
     }
 }
+
+/*
+ *  This function sorts the subgraphs into files based on how many vertices were removed from the origin graph
+ *  to find the subgraph.
+ */
+void sort_by_num_of_removed_vertices(std::string in_file, std::string pre_out_file, std::string post_out_file){
+    std::cout << std::endl << "SORTING BY NUMBER OF REMOVED VERTICES" << std::endl;
+
+    remove_create_directory(pre_out_file);
+
+    std::unordered_map<int, std::set<std::string>> division;
+
+    std::ifstream input_file;
+    input_file.open(in_file);
+    if (input_file.is_open()) {
+        std::string line;
+        while(getline(input_file, line)){
+            std::pair<std::string, std::vector<std::string>> parsed_line = parse_origin_line(line);
+            std::string graph = parsed_line.first;
+            std::vector<std::string> subgraphs = parsed_line.second;
+
+            int graph_vertices = get_num_of_vertices(graph);
+
+            int diff;
+            for(auto subgraph: subgraphs){
+                int subgraph_vertices = get_num_of_vertices(subgraph);
+                diff = graph_vertices - subgraph_vertices;
+
+                if(division.find(diff) != division.end()){
+                    division[diff].insert(subgraph);
+                } else {
+                    division[diff] = {subgraph};
+                }
+            }
+        }
+        input_file.close();
+    } else {
+        std::cout << "Couldn't open input file." << std::endl;
+    }
+
+    for(auto divis: division){
+        int diff = divis.first;
+        std::set<std::string> subgraphs = divis.second;
+
+        std::ofstream output_file;
+        output_file.open(pre_out_file + std::to_string(diff) + post_out_file);
+        if(output_file.is_open()){
+            for(std::string subgraph: subgraphs){
+                    output_file << subgraph + "\n";
+            }
+            output_file.close();
+        } else {
+            std::cout << "Couldn't open output file (" + pre_out_file + std::to_string(diff) + post_out_file + ")." << std::endl;
+        }
+    }
+}
+
+/*
+ *  This function counts the number of subgraphs for each graph.
+ */
+void count_subgraphs(std::string in_file, std::string type){
+    if(type == "cubic"){
+        remove_previous_file("iofiles/cubic-graphs/numOfSubgraphs.txt");
+    } else if(type == "snark"){
+        remove_previous_file("iofiles/snarks-graphs/numOfSubgraphs.txt");
+    } else if(type == "small-cubic"){
+        remove_previous_file("iofiles/smaller-cubic-graphs/numOfSubgraphs.txt");
+    } else if(type == "small-snark"){
+        remove_previous_file("iofiles/smaller-snarks-graphs/numOfSubgraphs.txt");
+    }
+
+    std::cout << std::endl << "COUNTING SUBGRAPHS FOR EACH GRAPH" << std::endl;
+    std::map<std::string, int> counts;
+
+    std::ifstream input_file;
+    input_file.open(in_file);
+    if (input_file.is_open()) {
+        std::string line;
+        while(getline(input_file, line)){
+            std::pair<std::string, std::vector<std::string>> parsed_line = parse_origin_line(line);
+            std::string graph = parsed_line.first;
+            std::vector<std::string> subgraphs = parsed_line.second;
+
+            counts[graph] = subgraphs.size();
+        }
+        input_file.close();
+    } else {
+        std::cout << "Couldn't open input file." << std::endl;
+    }
+
+    std::string out_file;
+    if(type == "cubic"){
+        out_file = "iofiles/cubic-graphs/numOfSubgraphs.txt";
+    } else if(type == "snark"){
+        out_file = "iofiles/snarks-graphs/numOfSubgraphs.txt";
+    } else if(type == "small-cubic"){
+        out_file = "iofiles/smaller-cubic-graphs/numOfSubgraphs.txt";
+    } else if(type == "small-snark"){
+        out_file = "iofiles/smaller-snarks-graphs/numOfSubgraphs.txt";
+    }
+
+    std::ofstream output_file;
+    output_file.open(out_file);
+    if(output_file.is_open()){
+        for(auto elem: counts){
+            output_file << elem.first << ": " << elem.second << "\n";
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_file + ")." << std::endl;
+    }
+}
+
+/*
+ * This function splits the graphs based on whether they contain the Petersen subgraph.
+ * */
+void petersen_subgraph(std::string in_file, std::string type){
+    std::cout << std::endl << "SPLITTING GRAPHS BASED ON WHETHER THEY CONTAIN THE PETERSEN SUBGRAPH" << std::endl;
+
+    if(type == "cubic"){
+        remove_previous_file("iofiles/cubic-graphs/containPetersen/do_contain.txt");
+        remove_previous_file("iofiles/cubic-graphs/containPetersen/dont_contain.txt");
+        remove_previous_file("iofiles/cubic-graphs/containPetersen/only_contain.txt");
+    } else if(type == "snark"){
+        remove_previous_file("iofiles/snarks-graphs/snarks-containPetersen/snarks-do_contain.txt");
+        remove_previous_file("iofiles/snarks-graphs/snarks-containPetersen/snarks-do_contain.txt");
+        remove_previous_file("iofiles/snarks-graphs/snarks-containPetersen/snarks-only_contain.txt");
+    } else if(type == "small-cubic"){
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-containPetersen/smaller-cubic-do_contain.txt");
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-containPetersen/smaller-cubic-do_contain.txt");
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-containPetersen/smaller-cubic-only_contain.txt");
+    } else if(type == "small-snark"){
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-containPetersen/smaller-snarks-do_contain.txt");
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-containPetersen/smaller-snarks-do_contain.txt");
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-containPetersen/smaller-snarks-only_contain.txt");
+    }
+
+    std::set<std::string> contain;
+    std::set<std::string> contain_only;
+    std::set<std::string> dont_contain;
+
+    std::ifstream input_file;
+    input_file.open(in_file);
+    if (input_file.is_open()) {
+        std::string line;
+        while(getline(input_file, line)){
+            std::pair<std::string, std::vector<std::string>> parsed_line = parse_origin_line(line);
+            std::string graph = parsed_line.first;
+            std::vector<std::string> sbgs = parsed_line.second;
+
+            std::set<std::string> subgraphs (sbgs.begin(), sbgs.end());
+
+            if(subgraphs.find("H@Q@YiW") != subgraphs.end()){
+                contain.insert(graph);
+                if(subgraphs.size() == 1){
+                    contain_only.insert(graph);
+                }
+            } else {
+                dont_contain.insert(graph);
+            }
+        }
+        input_file.close();
+    } else {
+        std::cout << "Couldn't open input file." << std::endl;
+    }
+
+    std::string out_do_file;
+    std::string out_dont_file;
+    std::string out_only_file;
+    if(type == "cubic"){
+        out_do_file = "iofiles/cubic-graphs/containPetersen/do_contain.txt";
+        out_dont_file = "iofiles/cubic-graphs/containPetersen/dont_contain.txt";
+        out_only_file = "iofiles/cubic-graphs/containPetersen/only_contain.txt";
+    } else if(type == "snark"){
+        out_do_file = "iofiles/snarks-graphs/snarks-containPetersen/snarks-do_contain.txt";
+        out_dont_file = "iofiles/snarks-graphs/snarks-containPetersen/snarks-dont_contain.txt";
+        out_only_file = "iofiles/snarks-graphs/snarks-containPetersen/snarks-only_contain.txt";
+    } else if(type == "small-cubic"){
+        out_do_file = "iofiles/smaller-cubic-graphs/smaller-cubic-containPetersen/smaller-cubic-do_contain.txt";
+        out_dont_file = "iofiles/smaller-cubic-graphs/smaller-cubic-containPetersen/smaller-cubic-dont_contain.txt";
+        out_only_file = "iofiles/smaller-cubic-graphs/smaller-cubic-containPetersen/smaller-cubic-only_contain.txt";
+    } else if(type == "small-snark"){
+        out_do_file = "iofiles/smaller-snarks-graphs/smaller-snarks-containPetersen/smaller-snarks-do_contain.txt";
+        out_dont_file = "iofiles/smaller-snarks-graphs/smaller-snarks-containPetersen/smaller-snarks-dont_contain.txt";
+        out_only_file = "iofiles/smaller-snarks-graphs/smaller-snarks-containPetersen/smaller-snarks-only_contain.txt";
+    }
+
+    std::ofstream output_file;
+    output_file.open(out_do_file);
+    if(output_file.is_open()){
+        for(auto graph: contain){
+            output_file << graph << "\n";
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_do_file + ")." << std::endl;
+    }
+
+    output_file.open(out_dont_file);
+    if(output_file.is_open()){
+        for(auto graph: dont_contain){
+            output_file << graph << "\n";
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_dont_file + ")." << std::endl;
+    }
+
+    output_file.open(out_only_file);
+    if(output_file.is_open()){
+        for(auto graph: contain_only){
+            output_file << graph << "\n";
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_only_file + ")." << std::endl;
+    }
+}
+
+/*
+ * This function counts how many elements are needed to be added to a subgraph
+ * to make it into the smallest possible snark.
+ * */
+void complete_subgraph_to_graph(std::string in_file, std::string type){
+    std::cout << std::endl << "COUNTING NEEDED ELEMENTS TO GET TO THE SMALLEST POSSIBLE SNARK" << std::endl;
+
+    if(type == "cubic"){
+        remove_previous_file("iofiles/cubic-graphs/completeToSnark/completeToSnark4.txt");
+        remove_previous_file("iofiles/cubic-graphs/completeToSnark/completeToSnark5.txt");
+    } else if(type == "snark"){
+        remove_previous_file("iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark4.txt");
+        remove_previous_file("iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark5.txt");
+    } else if(type == "small-cubic"){
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark4.txt");
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark5.txt");
+    } else if(type == "small-snark"){
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark4.txt");
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark5.txt");
+    }
+
+    if(type == "cubic"){
+        remove_previous_file("iofiles/cubic-graphs/completeToSnark/completeToSnark_max4.txt");
+        remove_previous_file("iofiles/cubic-graphs/completeToSnark/completeToSnark_max5.txt");
+    } else if(type == "snark"){
+        remove_previous_file("iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark_max4.txt");
+        remove_previous_file("iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark_max5.txt");
+    } else if(type == "small-cubic"){
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark_max4.txt");
+        remove_previous_file("iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark_max5.txt");
+    } else if(type == "small-snark"){
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark_max4.txt");
+        remove_previous_file("iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark_max5.txt");
+    }
+
+    std::set<std::string> snarks5;
+    std::ifstream snarks5_file;
+    snarks5_file.open("iofiles/snarks-graphs/snarks-general/snark-allGraphsInOne.g6");
+    if(snarks5_file.is_open()){
+        std::string line;
+        while(getline(snarks5_file, line)){
+            std::string graph6 = sparse6_to_graph6(canonical_form(graph6_to_graph(line)));
+            snarks5.insert(graph6);
+        }
+    } else {
+        std::cout << "Couldn't open snark5 file." << std::endl;
+    }
+
+    std::set<std::string> snarks4;
+    std::ifstream snarks4_file;
+    snarks4_file.open("iofiles/smaller-snarks-graphs/smaller-snarks-general/small-snark-allGraphsInOne.g6");
+    if(snarks4_file.is_open()){
+        std::string line;
+        while(getline(snarks4_file, line)){
+            std::string graph6 = sparse6_to_graph6(canonical_form(graph6_to_graph(line)));
+            snarks4.insert(graph6);
+        }
+    } else {
+        std::cout << "Couldn't open snark4 file." << std::endl;
+    }
+
+    std::vector<std::string> outputs4;
+    std::vector<std::string> outputs5;
+
+    int max_diff_v4 = -1;
+    int max_diff_e4 = -1;
+    std::string max_diff_g4 = "";
+    std::string max_diff_sg4 = "";
+
+    int max_diff_v5 = -1;
+    int max_diff_e5 = -1;
+    std::string max_diff_g5 = "";
+    std::string max_diff_sg5 = "";
+
+    std::ifstream input_file;
+    input_file.open(in_file);
+    if (input_file.is_open()) {
+        std::string line;
+
+        while(getline(input_file, line)){
+            std::string output4;
+            std::string output5;
+//            std::cout << line << std::endl;
+            std::pair<std::string, std::vector<std::string>> parsed_line = parse_origin_line(line);
+            std::string subgraph = parsed_line.first;
+            std::vector<std::string> graphs = parsed_line.second;
+
+            int subg_vertices = get_num_of_vertices(subgraph);
+            int subg_edges = get_num_of_edges(subgraph);
+
+            std::string min_g4 = "";
+            int min_v4 = std::numeric_limits<int>::max();
+            int min_e4 = std::numeric_limits<int>::max();
+
+            std::string min_g5 = "";
+            int min_v5 = std::numeric_limits<int>::max();
+            int min_e5 = std::numeric_limits<int>::max();
+            for(std::string graph: graphs){
+                std::string graph6 = sparse6_to_graph6(canonical_form(graph6_to_graph(graph)));
+
+                if(is_snark(snarks4, graph6)){
+                    int v = get_num_of_vertices(graph);
+                    int e = get_num_of_edges(graph);
+                    if(v < min_v4 && e < min_e4){
+                        min_v4 = v;
+                        min_e4 = e;
+                        min_g4 = graph;
+                    }
+                }
+                if(is_snark(snarks5, graph6)){
+                    int v = get_num_of_vertices(graph);
+                    int e = get_num_of_edges(graph);
+                    if(v < min_v5 && e < min_e5){
+                        min_v5 = v;
+                        min_e5 = e;
+                        min_g5 = graph;
+                    }
+                }
+            }
+
+
+            if(min_g4.size() > 0) {
+                std::string min4_g6 = sparse6_to_graph6(canonical_form(graph6_to_graph(min_g4)));
+                if (is_snark(snarks4, min4_g6)) {
+                    output4 += subgraph + "    v: " + std::to_string(subg_vertices) + "    e: " +
+                               std::to_string(subg_edges) + "\n";
+                    output4 += min_g4 + "    v: " + std::to_string(min_v4) + "    e: " + std::to_string(min_e4) + "\n";
+                    output4 += "    diff v: " + std::to_string(min_v4 - subg_vertices) + "    diff e: " +
+                               std::to_string(min_e4 - subg_edges) + "\n\n";
+
+                    int diff_v = min_v4 - subg_vertices;
+                    int diff_e = min_e4 - subg_edges;
+
+                    if(diff_v >= max_diff_v4 && diff_e > max_diff_e4){
+                        max_diff_v4 = diff_v;
+                        max_diff_e4 = diff_e;
+                        max_diff_g4 = min_g4;
+                        max_diff_sg4 = subgraph;
+                    }
+                }
+            }
+
+
+            if(min_g5.size() > 0) {
+                std::string min5_g6 = sparse6_to_graph6(canonical_form(graph6_to_graph(min_g5)));
+                if (is_snark(snarks5, min5_g6)) {
+                    output5 += subgraph + "    v: " + std::to_string(subg_vertices) + "    e: " +
+                               std::to_string(subg_edges) + "\n";
+                    output5 += min_g5 + "    v: " + std::to_string(min_v5) + "    e: " + std::to_string(min_e5) + "\n";
+                    output5 += "    diff v: " + std::to_string(min_v5 - subg_vertices) + "    diff e: " +
+                               std::to_string(min_e5 - subg_edges) + "\n\n";
+
+                    int diff_v = min_v5 - subg_vertices;
+                    int diff_e = min_e5 - subg_edges;
+
+                    if(diff_v >= max_diff_v5 && diff_e > max_diff_e5){
+                        max_diff_v5 = diff_v;
+                        max_diff_e5 = diff_e;
+                        max_diff_g5 = min_g5;
+                        max_diff_sg5 = subgraph;
+                    }
+                }
+            }
+
+            outputs4.push_back(output4);
+            outputs5.push_back(output5);
+        }
+
+
+
+        input_file.close();
+    } else {
+        std::cout << "Couldn't open input file. (" + in_file + ")" << std::endl;
+    }
+
+    std::string out_4_file;
+    std::string out_5_file;
+    if(type == "cubic"){
+        out_4_file = "iofiles/cubic-graphs/completeToSnark/completeToSnark4.txt";
+        out_5_file = "iofiles/cubic-graphs/completeToSnark/completeToSnark5.txt";
+    } else if(type == "snark"){
+        out_4_file = "iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark4.txt";
+        out_5_file = "iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark5.txt";
+    } else if(type == "small-cubic"){
+        out_4_file = "iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark4.txt";
+        out_5_file = "iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark5.txt";
+    } else if(type == "small-snark"){
+        out_4_file = "iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark4.txt";
+        out_5_file = "iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark5.txt";
+    }
+
+    std::ofstream output_file;
+    output_file.open(out_4_file);
+    if(output_file.is_open()){
+        for(auto output: outputs4){
+            output_file << output;
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_4_file + ")." << std::endl;
+    }
+
+    output_file.open(out_5_file);
+    if(output_file.is_open()){
+        for(auto output: outputs5){
+            output_file << output;
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_5_file + ")." << std::endl;
+    }
+
+    std::string out_max4_file;
+    std::string out_max5_file;
+    if(type == "cubic"){
+        out_max4_file = "iofiles/cubic-graphs/completeToSnark/completeToSnark_max4.txt";
+        out_max5_file = "iofiles/cubic-graphs/completeToSnark/completeToSnark_max5.txt";
+    } else if(type == "snark"){
+        out_max4_file = "iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark_max4.txt";
+        out_max5_file = "iofiles/snarks-graphs/snarks-completeToSnark/snarks-completeToSnark_max5.txt";
+    } else if(type == "small-cubic"){
+        out_max4_file = "iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark_max4.txt";
+        out_max5_file = "iofiles/smaller-cubic-graphs/smaller-cubic-completeToSnark/smaller-cubic-completeToSnark_max5.txt";
+    } else if(type == "small-snark"){
+        out_max4_file = "iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark_max4.txt";
+        out_max5_file = "iofiles/smaller-snarks-graphs/smaller-snarks-completeToSnark/smaller-snarks-completeToSnark_max5.txt";
+    }
+
+    output_file.open(out_max4_file);
+    if(output_file.is_open()){
+        if(max_diff_g4 != ""){
+            output_file << max_diff_sg4 << "    " << max_diff_g4 << "    diff v: " << max_diff_v4 << "    diff e: " << max_diff_e4 << "\n";
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_max4_file + ")." << std::endl;
+    }
+
+    output_file.open(out_max5_file);
+    if(output_file.is_open()){
+        if(max_diff_g5 != ""){
+            output_file << max_diff_sg5 << "    " << max_diff_g5 << "    diff v: " << max_diff_v5 << "    diff e: " << max_diff_e5 << "\n";
+        }
+        output_file.close();
+    } else {
+        std::cout << "Couldn't open output file (" + out_max5_file + ")." << std::endl;
+    }
+
+}
+
+// ============================================================
+
 
 /* To run this file time and subgraph files must be generated. */
 void get_stats(std::string type) {
@@ -1063,6 +1553,16 @@ void get_stats(std::string type) {
 
     std::string graphs_by_subgraphs;
 
+    std::string sort_by_diff_ver;
+    std::string out_pre_sort_by_diff_ver;
+    std::string out_post_sort_by_diff_ver;
+
+    std::string subgraphs_count;
+
+    std::string petersen_subgraphs;
+
+    std::string complete_subgraph;
+
     if (type == "cubic") {
         orders = {"10", "12", "14", "16", "18", "20"};
         SIZE = 6;
@@ -1111,6 +1611,14 @@ void get_stats(std::string type) {
         edges_origin_diff = edges_origin;
 
         graphs_by_subgraphs = vertices_origin;
+
+        sort_by_diff_ver = vertices_origin;
+        out_pre_sort_by_diff_ver = "iofiles/cubic-graphs/diffVertices/";
+        out_post_sort_by_diff_ver = "-vertex-diff-graph-subgraph.txt";
+
+        subgraphs_count = vertices_origin;
+        petersen_subgraphs = vertices_origin;
+        complete_subgraph = "iofiles/cubic-graphs/subgraphs-origin.txt";
 
     } else if (type == "snark") {
         orders = {"10", "18", "20", "22", "24", "26", "28"};
@@ -1161,6 +1669,13 @@ void get_stats(std::string type) {
 
         graphs_by_subgraphs = vertices_origin;
 
+        sort_by_diff_ver = vertices_origin;
+        out_pre_sort_by_diff_ver = "iofiles/snarks-graphs/snarks-diffVertices/";
+        out_post_sort_by_diff_ver = "-vertex-diff-graph-subgraph.txt";
+
+        subgraphs_count = vertices_origin;
+        petersen_subgraphs = vertices_origin;
+        complete_subgraph = "iofiles/snarks-graphs/subgraphs-origin.txt";
 
     } else if (type == "small-cubic") {
         orders = {"6", "8", "10", "12", "14", "16", "18", "20"};
@@ -1211,6 +1726,14 @@ void get_stats(std::string type) {
 
         graphs_by_subgraphs = vertices_origin;
 
+        sort_by_diff_ver = vertices_origin;
+        out_pre_sort_by_diff_ver = "iofiles/smaller-cubic-graphs/smaller-cubic-diffVertices/";
+        out_post_sort_by_diff_ver = "-vertex-diff-graph-subgraph.txt";
+
+        subgraphs_count = vertices_origin;
+        petersen_subgraphs = vertices_origin;
+        complete_subgraph = "iofiles/smaller-cubic-graphs/subgraphs-origin.txt";
+
     } else if(type == "small-snark"){
         orders = {"10", "18", "20", "22", "24"};
         SIZE = 5;
@@ -1260,6 +1783,14 @@ void get_stats(std::string type) {
 
         graphs_by_subgraphs = vertices_origin;
 
+        sort_by_diff_ver = vertices_origin;
+        out_pre_sort_by_diff_ver = "iofiles/smaller-snarks-graphs/smaller-snarks-diffVertices/";
+        out_post_sort_by_diff_ver = "-vertex-diff-graph-subgraph.txt";
+
+        subgraphs_count = vertices_origin;
+        petersen_subgraphs = vertices_origin;
+        complete_subgraph = "iofiles/smaller-snarks-graphs/subgraphs-origin.txt";
+
     }
 
     std::string in_files_filtered[SIZE];
@@ -1302,6 +1833,12 @@ void get_stats(std::string type) {
     edges_diff(edges_origin_diff, type);
 
     sort_origin_by_subgraphs(graphs_by_subgraphs, type);
+
+    sort_by_num_of_removed_vertices(sort_by_diff_ver, out_pre_sort_by_diff_ver, out_post_sort_by_diff_ver);
+    count_subgraphs(subgraphs_count, type);
+    petersen_subgraph(petersen_subgraphs, type);
+
+    complete_subgraph_to_graph(complete_subgraph, type);
 }
 
 #endif

@@ -41,15 +41,6 @@ bool are_isomorphic(grph g1, grph g2) {
 }
 
 /*
- * This function turns graph g into its canonical form.
-*/
-std::string canonical_form(grph g) {
-    ba_graph::Graph G = graph_to_ba_graph(g);
-    return canonical_sparse6(G);
-}
-
-
-/*
  * This function finds the disconnected veritces in each subgraph and removes them.
 */
 void remove_components_of_one_vertex(std::unordered_set<std::string> &subgraphs) {

@@ -23,7 +23,7 @@ void generate(std::string type) {
         suffixes = {"10", "18", "20", "22", "24", "26"};
         file_lenghts = {1, 2, 6, 20, 38, 280};
         from = 0;
-        to = 6; // v origin.txt po 26 vratane
+        to = 6;
     } else if (type == "small-cubic") {
         suffixes = {"06", "08", "10", "12", "14", "16", "18", "20"};
         file_lenghts = {1, 2, 6, 22, 110, 792, 7805, 97546};
@@ -48,35 +48,17 @@ void generate(std::string type) {
     timer.stop();
 
     std::cout << std::endl;
-//        std::cout << "shared memo snark" << std::endl;
     std::cout << "==================== OVERALL TIME [ms]: " << std::fixed << std::setprecision(0) << timer.elapsedMilliseconds()
               << " ====================" << std::endl;
     std::cout << "==================== NUMBER OF SUBGRAPHS: " << subgraphs << " ====================" << std::endl;
-
-//    }
-/*    timer.start();
-    subgraphs = 0;
-    for(int i = from; i < to; i++) {
-        std::cout << "i: " << i << std::endl;
-        subgraphs += run_no_memo(suffixes, i, 0, file_lenghts[i], type);
-//        subgraphs += run_origin(suffixes, i, 0, file_lenghts[i], type);
-    }
-    timer.stop();
-
-    std::cout << std::endl;
-    std::cout << "no memo" << std::endl;
-    std::cout << "OVERALL TIME [ms]: " << std::fixed << std::setprecision (0) <<  timer.elapsedMilliseconds() << std::endl;
-    std::cout << "NUMBER OF SUBGRAPHS: " << subgraphs << std::endl;*/
 }
 
 int main(){
-//        std::string types[] = {"cubic", "snark", "small-cubic", "small-snark"};
-//    std::string types[] = {"cubic", "snark"};
-    std::string types[] = {"small-snark"};
-//    std::string types[] = {"small-cubic", "small-snark"};
-//    for(std::string type: types) {
-//        generate(type);
-//    }
+//        all types are {"cubic", "snark", "small-cubic", "small-snark"};
+    std::string types[] = {"cubic", "snark", "small-snark"};
+    for(std::string type: types) {
+        generate(type);
+    }
 
     for(std::string type: types) {
         get_stats(type);
